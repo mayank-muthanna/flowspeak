@@ -1,97 +1,138 @@
+# Monochrome Infinite Canvas
 
+Production-structured Nuxt 3 + TailwindCSS + Convex monochrome infinite whiteboard.
 
+## Features
 
-# 🚀 Nuxt + Convex Todo Template
+- Infinite pan and zoom canvas
+- Subtle dotted monochrome grid
+- Drag-and-drop element creation from slide-up panel
+- Rectangle, rounded box, text, sticky note, free draw, table, connectors/arrows
+- Multi-select and delete
+- Real-time sync with Convex (elements + cursors)
+- Room creation with 6-digit room code
+- 6-digit passcode join with hashed passcode storage
+- Basic join/create rate limiting
+- Agent bridge service layer for future Live AI integration
 
-A modern, full-stack Todo application starter kit powered by **Nuxt 3**, **Convex**, and **Tailwind CSS**. This template provides a seamless developer experience with real-time backend updates and a high-performance frontend.
+## Tech Stack
 
----
+- Nuxt 3
+- Vue 3 + TypeScript
+- TailwindCSS
+- Convex
 
-## 🛠️ Installation Guide
+## Project Structure
 
-Follow these steps to get your development environment up and running.
-
-### 1. Clone the Repository
-```bash
-git clone https://github.com/mayank-muthanna/nuxt-convex-todo-template.git
-cd nuxt-convex-todo-template
+```txt
+app/
+  components/
+    canvas/InfiniteCanvas.vue
+    elements/CanvasElement.vue
+    elements/ConnectorLayer.vue
+    elements/TableElement.vue
+    ui/AddElementPanel.vue
+    ui/RoomAccessGate.vue
+    ui/TopBar.vue
+  composables/
+    useCanvasState.ts
+    useCollaboration.ts
+    useElementActions.ts
+    useRoom.ts
+  pages/
+    index.vue
+    room/[code].vue
+  services/agentBridge.ts
+  types/canvas.ts
+convex/
+  schema.ts
+  rooms.ts
+  canvas.ts
+  presence.ts
+  lib/security.ts
 ```
 
-### 2. Install Dependencies
+## Convex Data Model
+
+- `rooms`: metadata + hashed passcode + 6-digit room code
+- `roomMembers`: room membership/session tokens and activity timestamps
+- `elements`: graph-friendly serializable canvas objects
+- `presence`: live cursor positions
+- `rateLimits`: basic per-client join/create counters
+
+Element shape:
+
+```ts
+{
+  id: string;
+  type: string;
+  position: { x: number; y: number };
+  size: { width: number; height: number };
+  content: Record<string, unknown>;
+  metadata: {
+    createdBy: string;
+    createdAt: number;
+    lastModified: number;
+    relationships: string[];
+  };
+}
+```
+
+Connector content:
+
+```ts
+{
+  fromId: string;
+  toId: string;
+  anchorPoints: Record<string, unknown>;
+}
+```
+
+## Core Canvas Engine API
+
+Defined in `app/composables/useElementActions.ts`:
+
+- `createElement()`
+- `updateElement()`
+- `deleteElement()`
+- `connectElements()`
+- `updateTableCell()`
+- `moveElement()`
+
+These functions are reusable by UI and AI services.
+
+## Agent Integration Surface
+
+`app/services/agentBridge.ts` exposes:
+
+- `getCanvasGraph()`
+- `applyAgentChanges(changes)`
+- `suggestLayout()`
+- `analyzeStructure()`
+
+## Local Setup
+
+1. Install dependencies:
 ```bash
 npm install
 ```
 
-### 3. Initialize Convex Backend
-Run the following command to link your local environment to the Convex cloud logic:
+2. Start Convex (creates `.env.local` and generated API types):
 ```bash
 npx convex dev
 ```
-**What this does:**
-*   Prompts you to **Login/Signup** to Convex.
-*   Prompts you to **Create a new project**.
-*   **Auto-registers** your backend schema and functions.
-*   **Auto-generates** your `.env.local` file with the necessary API keys.
 
-### 4. Start the Frontend
-Open a **new terminal** and launch the Nuxt development server:
+3. Start Nuxt:
 ```bash
 npm run dev
 ```
-> Your application is now live at: **`http://localhost:3000`**
 
----
-
-## 🏗️ Project Architecture
-
-### Backend (Convex)
-Convex manages your database, serverless functions, and real-time synchronization.
-
-| File | Description |
-| :--- | :--- |
-| `convex/schema.ts` | Defines the data structure and table indexes. |
-| `convex/tasks.ts` | Contains the backend logic (Queries & Mutations). |
-
-### Frontend (Nuxt)
-A modern Vue.js framework styled with Tailwind CSS.
-
-| File/Folder | Description |
-| :--- | :--- |
-| `app/app.vue` | The main entry point and UI layout (Tailwind integrated). |
-| `app/pages/` | Handles the application routing. |
-
----
-
-## 📂 Directory Structure
-
-```text
-nuxt-convex-todo-template/
-├── convex/              # Backend logic (Convex)
-│   ├── schema.ts        # Database Schema
-│   └── tasks.ts         # API Functions
-├── app/                 # Nuxt Frontend
-│   ├── app.vue          # Main UI file
-│   └── pages/           # App routes
-├── .env.local           # Auto-generated API keys
-├── nuxt.config.ts       # Nuxt configuration
-└── package.json         # Project dependencies
+4. Open:
+```txt
+http://localhost:3000
 ```
 
----
+## Notes
 
-## 📖 Reference Documentation
-
-Stay informed with the official documentation for the technologies used in this template:
-
-*   **[Convex + Nuxt Quickstart](https://docs.convex.dev/quickstart/nuxt)** – Learn how to integrate Convex with Nuxt.
-*   **[Nuxt Directory Structure](https://nuxt.com/docs/4.x/directory-structure/app/pages)** – Understanding the Nuxt 4/v3 layout.
-*   **[Tailwind CSS](https://tailwindcss.com/docs)** – Rapidly build custom user interfaces.
-
----
-
-### 📝 Notes
-- Ensure you keep your `npx convex dev` terminal running while developing to allow for real-time schema updates.
-- All backend functions are automatically synced to the cloud upon saving.
-
----
-*Built with ❤️ using Nuxt and Convex.*
+- This workspace currently cannot reach npm in the execution sandbox, so dependency install/build could not be completed here.
+- After `convex dev`, Convex generates `convex/_generated/*` used by the typed API imports.
