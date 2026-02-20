@@ -65,6 +65,14 @@ const applyTableResize = (rows: number, columns: number) => {
     },
   });
 };
+
+const showsDragHandle = computed(() => {
+  return (
+    props.element.type === "text" ||
+    props.element.type === "sticky" ||
+    props.element.type === "table"
+  );
+});
 </script>
 
 <template>
@@ -73,6 +81,14 @@ const applyTableResize = (rows: number, columns: number) => {
     :style="styleObject"
     @pointerdown="(event) => emit('pointerdown', event, element)"
   >
+    <div
+      v-if="showsDragHandle"
+      data-drag-handle
+      class="absolute top-1 left-1 z-10 h-5 px-2 border border-zinc-300 bg-white/90 text-[10px] leading-5 cursor-move"
+    >
+      Drag
+    </div>
+
     <template v-if="element.type === 'rectangle' || element.type === 'rounded'">
       <div class="w-full h-full p-3 text-xs text-zinc-700">
         Box
@@ -82,7 +98,7 @@ const applyTableResize = (rows: number, columns: number) => {
     <template v-else-if="element.type === 'text' || element.type === 'sticky'">
       <textarea
         v-model="textValue"
-        class="w-full h-full resize-none bg-transparent p-3 outline-none text-sm select-text"
+        class="w-full h-full resize-none bg-transparent p-3 pt-8 outline-none text-sm select-text"
       />
     </template>
 

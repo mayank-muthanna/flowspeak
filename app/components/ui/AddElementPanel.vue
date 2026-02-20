@@ -6,8 +6,7 @@ const open = defineModel<boolean>("open", { required: true });
 const items: { type: CanvasElementType; label: string }[] = [
   { type: "rectangle", label: "Rectangle" },
   { type: "rounded", label: "Rounded Box" },
-  { type: "arrow", label: "Arrow Connector" },
-  { type: "connector", label: "Straight Connector" },
+  { type: "arrow", label: "Arrow" },
   { type: "text", label: "Text Block" },
   { type: "table", label: "Table Block" },
   { type: "sticky", label: "Sticky Block" },
