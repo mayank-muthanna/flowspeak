@@ -130,6 +130,19 @@ export function useCollaboration(options: CollaborationOptions) {
     }
   };
 
+  const pingPresence = async (x: number, y: number) => {
+    try {
+      await heartbeatMutation.mutate({
+        roomId: options.roomId as never,
+        sessionToken: options.sessionToken,
+        x,
+        y,
+      });
+    } catch {
+      // Ignore transient presence errors.
+    }
+  };
+
   return {
     elements,
     cursors,
@@ -138,5 +151,6 @@ export function useCollaboration(options: CollaborationOptions) {
     scheduleElementSync,
     queueMove,
     broadcastCursor,
+    pingPresence,
   };
 }

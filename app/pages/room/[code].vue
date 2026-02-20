@@ -11,6 +11,7 @@ const joining = ref(false);
 const error = ref("");
 const sessionToken = ref<string>("");
 const roomId = ref<string>("");
+const suppressInvalidationUntil = ref(0);
 
 const { data: roomMeta } = useConvexQuery(api.rooms.getRoomByCode, () => ({
   code: code.value,
@@ -30,6 +31,8 @@ onMounted(() => {
 watchEffect(() => {
   if (!sessionToken.value) return;
   if (!validation.value) return;
+  if (validation.value.checkedToken !== sessionToken.value) return;
+  if (Date.now() < suppressInvalidationUntil.value) return;
   if (validation.value.valid) return;
   room.clearSession(code.value);
   sessionToken.value = "";
@@ -43,6 +46,7 @@ const submitJoin = async (passcode: string, name?: string) => {
     const session = await room.joinRoom(code.value, passcode, name);
     sessionToken.value = session.sessionToken;
     roomId.value = session.roomId;
+    suppressInvalidationUntil.value = Date.now() + 2500;
   } catch (joinError) {
     error.value =
       joinError instanceof Error ? joinError.message : "Could not join room.";

@@ -136,7 +136,7 @@ export const validateSession = query({
       .withIndex("by_code", (q) => q.eq("code", args.code))
       .unique();
 
-    if (!room) return { valid: false };
+    if (!room) return { valid: false, checkedToken: args.sessionToken };
 
     const member = await ctx.db
       .query("roomMembers")
@@ -145,10 +145,11 @@ export const validateSession = query({
       )
       .unique();
 
-    if (!member) return { valid: false };
+    if (!member) return { valid: false, checkedToken: args.sessionToken };
 
     return {
       valid: true,
+      checkedToken: args.sessionToken,
       roomId: room._id,
       code: room.code,
       sessionName: member.sessionName,
@@ -161,12 +162,16 @@ export const getActiveUserCount = query({
     roomId: v.id("rooms"),
   },
   handler: async (ctx, args) => {
-    const activeCutoff = Date.now() - 30_000;
-    const members = await ctx.db
-      .query("roomMembers")
+    const activeCutoff = Date.now() - 20_000;
+    const cursors = await ctx.db
+      .query("presence")
       .withIndex("by_room", (q) => q.eq("roomId", args.roomId))
       .collect();
-
-    return members.filter((member) => member.lastSeen >= activeCutoff).length;
+    const unique = new Set(
+      cursors
+        .filter((cursor) => cursor.lastSeen >= activeCutoff)
+        .map((cursor) => cursor.sessionToken),
+    );
+    return unique.size;
   },
 });

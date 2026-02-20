@@ -305,6 +305,7 @@ const controlDrag = reactive({
 });
 
 const tableCellSyncTimers = new Map<string, ReturnType<typeof setTimeout>>();
+let presenceTimer: ReturnType<typeof setInterval> | null = null;
 
 const worldStyle = computed(() => ({
   width: "50000px",
@@ -767,9 +768,17 @@ defineExpose({
 
 onMounted(() => {
   canvasRef.value?.focus();
+  void collab.pingPresence(hoverWorldPoint.value.x, hoverWorldPoint.value.y);
+  presenceTimer = setInterval(() => {
+    void collab.pingPresence(hoverWorldPoint.value.x, hoverWorldPoint.value.y);
+  }, 5000);
 });
 
 onBeforeUnmount(() => {
+  if (presenceTimer) {
+    clearInterval(presenceTimer);
+    presenceTimer = null;
+  }
   for (const timer of tableCellSyncTimers.values()) {
     clearTimeout(timer);
   }
