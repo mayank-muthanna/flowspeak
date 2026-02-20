@@ -61,22 +61,11 @@ const pointer = reactive({
   elementStarts: {} as Record<string, { x: number; y: number }>,
 });
 
-let rafPending = false;
-const scheduleTransform = () => {
-  if (rafPending) return;
-  rafPending = true;
-  requestAnimationFrame(() => {
-    rafPending = false;
-    if (!worldRef.value) return;
-    worldRef.value.style.transform = `translate(${state.viewport.x}px, ${state.viewport.y}px) scale(${state.viewport.zoom})`;
-  });
-};
-
-watch(
-  () => [state.viewport.x, state.viewport.y, state.viewport.zoom],
-  scheduleTransform,
-  { immediate: true },
-);
+const worldStyle = computed(() => ({
+  width: "50000px",
+  height: "50000px",
+  transform: `translate(${state.viewport.x}px, ${state.viewport.y}px) scale(${state.viewport.zoom})`,
+}));
 
 const pointerWorld = (event: PointerEvent) => {
   const rect = canvasRef.value?.getBoundingClientRect();
@@ -108,6 +97,13 @@ const onCanvasPointerDown = (event: PointerEvent) => {
   if (event.button !== 0 && event.button !== 1) return;
   canvasRef.value?.focus();
   const target = event.target as HTMLElement;
+  if (
+    target.closest(
+      "button, input, textarea, select, label, a, [contenteditable='true']",
+    )
+  ) {
+    return;
+  }
   if (target.closest("[data-element]")) return;
   state.clearSelection();
   pointer.mode = "panning";
@@ -203,7 +199,14 @@ const createElementByType = async (
   type: CanvasElementType,
   at?: { x: number; y: number },
 ) => {
-  const position = at ?? { x: 120, y: 120 };
+  const rect = canvasRef.value?.getBoundingClientRect();
+  const centeredPosition = rect
+    ? state.screenToWorld({
+        x: rect.width / 2,
+        y: rect.height / 2,
+      })
+    : { x: 120, y: 120 };
+  const position = at ?? centeredPosition;
   if (type === "arrow" || type === "connector") {
     const selected = state.selectedIds.value.filter((id) =>
       idToElement.value.has(id),
@@ -217,7 +220,12 @@ const createElementByType = async (
     });
     return;
   }
-  await actions.createElement(type, position);
+  try {
+    const created = await actions.createElement(type, position);
+    collab.commitOptimistic(created);
+  } catch (error) {
+    console.error("Failed to create element", error);
+  }
 };
 
 const onDeleteSelection = async () => {
@@ -290,18 +298,18 @@ onMounted(() => {
     />
 
     <div
-      class="absolute inset-0 pointer-events-none"
-      style="
-        background-image: radial-gradient(#d4d4d4 1px, transparent 1px);
-        background-size: 20px 20px;
-      "
-    ></div>
-
-    <div
       ref="worldRef"
       class="absolute left-0 top-0 origin-top-left"
-      style="width: 50000px; height: 50000px"
+      :style="worldStyle"
     >
+      <div
+        class="absolute inset-0 pointer-events-none"
+        style="
+          background-image: radial-gradient(#d4d4d4 1px, transparent 1px);
+          background-size: 20px 20px;
+        "
+      ></div>
+
       <ConnectorLayer :elements="collab.elements.value as any" />
 
       <div v-for="element in nodeElements" :key="element.id" data-element>
@@ -330,7 +338,7 @@ onMounted(() => {
 
     <AddElementPanel
       v-model:open="panelOpen"
-      @create-now="(type) => createElementByType(type, { x: 160, y: 160 })"
+      @create-now="createElementByType"
     />
   </div>
 </template>

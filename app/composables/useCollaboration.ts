@@ -37,7 +37,7 @@ export function useCollaboration(options: CollaborationOptions) {
     optimisticElements.value[element.id] = element;
     setTimeout(() => {
       delete optimisticElements.value[element.id];
-    }, 800);
+    }, 5000);
   };
 
   const queueMove = (

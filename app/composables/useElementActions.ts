@@ -65,11 +65,15 @@ export function useElementActions(options: ActionOptions) {
 
   const createElement = async (type: CanvasElementType, at: Point) => {
     const element = createBaseElement(type, at, options.currentUser);
-    await upsertMutation.mutate({
-      roomId: options.roomId as never,
-      sessionToken: options.sessionToken,
-      element,
-    });
+    void upsertMutation
+      .mutate({
+        roomId: options.roomId as never,
+        sessionToken: options.sessionToken,
+        element,
+      })
+      .catch((error) => {
+        console.error("createElement mutation failed", error);
+      });
     return element;
   };
 

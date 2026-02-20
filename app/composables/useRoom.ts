@@ -41,8 +41,9 @@ export function useRoom() {
   };
 
   const createRoom = async (passcode: string, sessionName?: string) => {
+    const normalizedPasscode = passcode.trim();
     const result = await createRoomMutation.mutate({
-      passcode,
+      passcode: normalizedPasscode,
       sessionName,
       clientKey: clientKey(),
     });
@@ -60,9 +61,11 @@ export function useRoom() {
     passcode: string,
     sessionName?: string,
   ) => {
+    const normalizedCode = code.trim();
+    const normalizedPasscode = passcode.trim();
     const result = await joinRoomMutation.mutate({
-      code,
-      passcode,
+      code: normalizedCode,
+      passcode: normalizedPasscode,
       sessionName,
       clientKey: clientKey(),
     });
