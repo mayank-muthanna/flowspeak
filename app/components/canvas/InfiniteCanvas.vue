@@ -60,6 +60,7 @@ const pointer = reactive({
   elementId: "",
   elementStarts: {} as Record<string, { x: number; y: number }>,
 });
+const tableCellSyncTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 const worldStyle = computed(() => ({
   width: "50000px",
@@ -105,6 +106,7 @@ const onCanvasPointerDown = (event: PointerEvent) => {
     return;
   }
   if (target.closest("[data-element]")) return;
+  event.preventDefault();
   state.clearSelection();
   pointer.mode = "panning";
   pointer.pointerId = event.pointerId;
@@ -118,6 +120,12 @@ const onCanvasPointerDown = (event: PointerEvent) => {
 const onElementPointerDown = (event: PointerEvent, element: ElementModel) => {
   event.stopPropagation();
   canvasRef.value?.focus();
+  const target = event.target as HTMLElement;
+  if (
+    target.closest("input, textarea, select, [contenteditable='true']")
+  ) {
+    return;
+  }
   const alreadySelected = state.selectedIds.value.includes(element.id);
   if (event.shiftKey) {
     state.toggleSelect(element.id);
@@ -173,7 +181,7 @@ const onPointerMove = async (event: PointerEvent) => {
       ...current,
       position: next,
     };
-    collab.commitOptimistic(optimistic);
+    collab.commitOptimistic(optimistic, 5_000);
     collab.queueMove(id, next, actions.moveElement);
   }
 };
@@ -222,7 +230,7 @@ const createElementByType = async (
   }
   try {
     const created = await actions.createElement(type, position);
-    collab.commitOptimistic(created);
+    collab.commitOptimistic(created, 5_000);
   } catch (error) {
     console.error("Failed to create element", error);
   }
@@ -231,7 +239,14 @@ const createElementByType = async (
 const onDeleteSelection = async () => {
   const targets = [...state.selectedIds.value];
   state.clearSelection();
-  await Promise.all(targets.map((id) => actions.deleteElement(id)));
+  targets.forEach((id) => collab.removeOptimistic(id, 3_000));
+  await Promise.all(
+    targets.map((id) =>
+      actions.deleteElement(id).catch((error) => {
+        console.error("deleteElement failed", error);
+      }),
+    ),
+  );
 };
 
 const onKeyDown = async (event: KeyboardEvent) => {
@@ -242,8 +257,7 @@ const onKeyDown = async (event: KeyboardEvent) => {
 };
 
 const onElementUpdate = async (element: ElementModel) => {
-  collab.commitOptimistic(element);
-  await actions.updateElement(element);
+  collab.scheduleElementSync(element, actions.updateElement, 350);
 };
 
 const onTableCell = async (
@@ -252,7 +266,46 @@ const onTableCell = async (
   column: number,
   value: string,
 ) => {
-  await actions.updateTableCell(id, row, column, value);
+  const current = idToElement.value.get(id);
+  if (current?.type === "table") {
+    const currentData = Array.isArray(current.content.data)
+      ? (current.content.data as string[][]).map((item) => [...item])
+      : [];
+    while (currentData.length <= row) currentData.push([]);
+    while (currentData[row].length <= column) currentData[row].push("");
+    currentData[row][column] = value;
+
+    const updated: ElementModel = {
+      ...current,
+      content: {
+        ...current.content,
+        data: currentData,
+        rows: Math.max(Number(current.content.rows ?? 0), currentData.length),
+        columns: Math.max(
+          Number(current.content.columns ?? 0),
+          currentData.reduce((max, cells) => Math.max(max, cells.length), 0),
+        ),
+      },
+      metadata: {
+        ...current.metadata,
+        lastModified: Date.now(),
+      },
+    };
+    collab.commitOptimistic(updated, 5_000);
+  }
+
+  const syncKey = `${id}:${row}:${column}`;
+  const existingTimer = tableCellSyncTimers.get(syncKey);
+  if (existingTimer) clearTimeout(existingTimer);
+  tableCellSyncTimers.set(
+    syncKey,
+    setTimeout(() => {
+      tableCellSyncTimers.delete(syncKey);
+      actions.updateTableCell(id, row, column, value).catch((error) => {
+        console.error("updateTableCell failed", error);
+      });
+    }, 350),
+  );
 };
 
 const toggleSnap = () => {
@@ -275,12 +328,19 @@ defineExpose({
 onMounted(() => {
   canvasRef.value?.focus();
 });
+
+onBeforeUnmount(() => {
+  for (const timer of tableCellSyncTimers.values()) {
+    clearTimeout(timer);
+  }
+  tableCellSyncTimers.clear();
+});
 </script>
 
 <template>
   <div
     ref="canvasRef"
-    class="relative h-screen overflow-hidden bg-white text-black"
+    class="relative h-screen overflow-hidden bg-white text-black select-none"
     @pointerdown="onCanvasPointerDown"
     @pointermove="onPointerMove"
     @pointerup="onPointerUp"

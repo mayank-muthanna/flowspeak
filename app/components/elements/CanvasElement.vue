@@ -82,7 +82,7 @@ const applyTableResize = (rows: number, columns: number) => {
     <template v-else-if="element.type === 'text' || element.type === 'sticky'">
       <textarea
         v-model="textValue"
-        class="w-full h-full resize-none bg-transparent p-3 outline-none text-sm"
+        class="w-full h-full resize-none bg-transparent p-3 outline-none text-sm select-text"
       />
     </template>
 

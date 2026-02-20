@@ -61,7 +61,7 @@ const onPaste = (r: number, c: number, event: ClipboardEvent) => {
             >
               <input
                 :value="cellValue(r - 1, c - 1)"
-                class="w-full px-2 py-1.5 outline-none"
+                class="w-full px-2 py-1.5 outline-none select-text"
                 @input="(event) => handleInput(r - 1, c - 1, event)"
                 @paste="(event) => onPaste(r - 1, c - 1, event)"
               />

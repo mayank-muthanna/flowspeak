@@ -11,9 +11,9 @@ defineEmits<{
 </script>
 
 <template>
-  <header class="absolute top-0 left-0 right-0 z-20 px-5 py-4 pointer-events-none">
+  <header class="absolute top-0 left-0 right-0 z-20 px-5 py-4 pointer-events-none select-none">
     <div class="flex items-start justify-between">
-      <div class="pointer-events-auto">
+      <div class="pointer-events-none">
         <h1 class="text-sm tracking-wide font-medium">Monochrome Canvas</h1>
       </div>
       <div class="pointer-events-auto flex items-center gap-3 text-xs">
