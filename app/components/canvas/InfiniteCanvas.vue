@@ -602,7 +602,7 @@ const onPointerMove = async (event: PointerEvent) => {
       ...current,
       position: next,
     };
-    collab.commitOptimistic(optimistic, 5_000);
+    collab.commitOptimistic(optimistic, 900);
     collab.queueMove(id, next, actions.moveElement);
   }
 };
