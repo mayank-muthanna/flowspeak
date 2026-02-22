@@ -2,6 +2,39 @@ import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { ensureRoomMember } from "./lib/security";
 
+const clamp = (value: number, min: number, max: number) =>
+  Math.max(min, Math.min(max, value));
+
+const HEX_COLOR_REGEX = /^#[0-9a-f]{6}$/i;
+
+const defaultStyleForType = (type: string) => {
+  if (type === "sticky") return { color: "#fef08a", opacity: 1 };
+  if (type === "freedraw" || type === "arrow" || type === "connector") {
+    return { color: "#111111", opacity: 1 };
+  }
+  return { color: "#ffffff", opacity: 1 };
+};
+
+const normalizeStyle = (style: unknown, type: string) => {
+  const defaults = defaultStyleForType(type);
+  if (!style || typeof style !== "object") return defaults;
+
+  const candidate = style as { color?: unknown; opacity?: unknown };
+  const color =
+    typeof candidate.color === "string" && HEX_COLOR_REGEX.test(candidate.color)
+      ? candidate.color
+      : defaults.color;
+  const opacityRaw =
+    typeof candidate.opacity === "number"
+      ? candidate.opacity
+      : Number(candidate.opacity);
+  const opacity = Number.isFinite(opacityRaw)
+    ? clamp(opacityRaw, 0.05, 1)
+    : defaults.opacity;
+
+  return { color, opacity };
+};
+
 const elementValidator = {
   id: v.string(),
   type: v.string(),
@@ -13,6 +46,12 @@ const elementValidator = {
     width: v.number(),
     height: v.number(),
   }),
+  style: v.optional(
+    v.object({
+      color: v.string(),
+      opacity: v.number(),
+    }),
+  ),
   content: v.any(),
   metadata: v.object({
     createdBy: v.string(),
@@ -37,6 +76,7 @@ export const getElements = query({
       type: row.type,
       position: row.position,
       size: row.size,
+      style: normalizeStyle(row.style, row.type),
       content: row.content,
       metadata: row.metadata,
     }));
@@ -65,6 +105,7 @@ export const createOrUpdateElement = mutation({
       type: args.element.type,
       position: args.element.position,
       size: args.element.size,
+      style: normalizeStyle(args.element.style, args.element.type),
       content: args.element.content,
       metadata: {
         ...args.element.metadata,
@@ -165,6 +206,7 @@ export const connectElements = mutation({
       type: "arrow",
       position: { x: 0, y: 0 },
       size: { width: 0, height: 0 },
+      style: defaultStyleForType("arrow"),
       content: {
         fromId: args.fromId,
         toId: args.toId,
@@ -192,6 +234,7 @@ export const connectElements = mutation({
         type: connector.type,
         position: connector.position,
         size: connector.size,
+        style: connector.style,
         content: connector.content,
         metadata: connector.metadata,
       });

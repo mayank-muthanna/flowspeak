@@ -25,6 +25,7 @@ type NormalizedArrowContent = {
 type ArrowView = {
   id: string;
   element: ElementModel;
+  style: ElementModel["style"];
   content: NormalizedArrowContent;
   path: string;
   polylinePoints: Point[];
@@ -74,6 +75,42 @@ const idToElement = computed(() => {
 
 const isArrowElement = (element: ElementModel) =>
   element.type === "arrow" || element.type === "connector";
+
+const MIN_ELEMENT_WIDTH = 80;
+const MIN_ELEMENT_HEIGHT = 60;
+const HEX_COLOR_REGEX = /^#[0-9a-f]{6}$/i;
+
+const clamp = (value: number, min: number, max: number) =>
+  Math.max(min, Math.min(max, value));
+
+const defaultStyleForType = (type: ElementModel["type"]): ElementModel["style"] => {
+  if (type === "sticky") return { color: "#fef08a", opacity: 1 };
+  if (type === "freedraw" || type === "arrow" || type === "connector") {
+    return { color: "#111111", opacity: 1 };
+  }
+  return { color: "#ffffff", opacity: 1 };
+};
+
+const normalizeStyle = (
+  style: Partial<ElementModel["style"]> | undefined,
+  type: ElementModel["type"],
+): ElementModel["style"] => {
+  const defaults = defaultStyleForType(type);
+  const color =
+    typeof style?.color === "string" && HEX_COLOR_REGEX.test(style.color)
+      ? style.color
+      : defaults.color;
+  const rawOpacity =
+    typeof style?.opacity === "number" ? style.opacity : Number(style?.opacity);
+  const opacity = Number.isFinite(rawOpacity)
+    ? clamp(rawOpacity, 0.05, 1)
+    : defaults.opacity;
+  return { color, opacity };
+};
+
+const resolveElementStyle = (element: ElementModel) => {
+  return normalizeStyle(element.style, element.type);
+};
 
 const elementCenter = (element: ElementModel): Point => ({
   x: element.position.x + element.size.width / 2,
@@ -258,6 +295,7 @@ const arrowViews = computed(() => {
     views.push({
       id: element.id,
       element,
+      style: resolveElementStyle(element),
       content,
       path,
       polylinePoints,
@@ -273,6 +311,24 @@ const selectedArrow = computed(() => {
   if (state.selectedIds.value.length !== 1) return null;
   const selectedId = state.selectedIds.value[0];
   return arrowViews.value.find((arrow) => arrow.id === selectedId) ?? null;
+});
+
+const selectedElement = computed<ElementModel | null>(() => {
+  if (state.selectedIds.value.length !== 1) return null;
+  const selectedId = state.selectedIds.value[0];
+  return idToElement.value.get(selectedId) ?? null;
+});
+
+const selectedElementStyle = computed(() => {
+  const selected = selectedElement.value;
+  if (!selected) return null;
+  return resolveElementStyle(selected);
+});
+
+const selectedResizableElement = computed(() => {
+  const selected = selectedElement.value;
+  if (!selected || isArrowElement(selected)) return null;
+  return selected;
 });
 
 const arrowTool = reactive({
@@ -330,6 +386,7 @@ const updateArrowElement = async (
   const updated: ElementModel = {
     ...element,
     type: "arrow",
+    style: resolveElementStyle(element),
     content: serializeArrowContent(content),
     metadata: {
       ...element.metadata,
@@ -367,6 +424,7 @@ const createArrowBetweenEndpoints = async (
     type: "arrow",
     position: { x: 0, y: 0 },
     size: { width: 0, height: 0 },
+    style: defaultStyleForType("arrow"),
     content: serializeArrowContent(content),
     metadata: {
       createdBy: props.sessionToken,
@@ -415,6 +473,86 @@ const setArrowStyle = async (style: ArrowStyle) => {
   }
 
   await updateArrowElement(selected.element, nextContent, 120);
+};
+
+const scheduleElementUpdate = (element: ElementModel, delayMs = 160) => {
+  const updated: ElementModel = {
+    ...element,
+    style: resolveElementStyle(element),
+    metadata: {
+      ...element.metadata,
+      lastModified: Date.now(),
+    },
+  };
+  collab.scheduleElementSync(updated, actions.updateElement, delayMs);
+};
+
+const setSelectedElementStyle = (patch: Partial<ElementModel["style"]>) => {
+  const selected = selectedElement.value;
+  if (!selected) return;
+  const currentStyle = resolveElementStyle(selected);
+  const nextStyle = normalizeStyle(
+    {
+      ...currentStyle,
+      ...patch,
+    },
+    selected.type,
+  );
+  scheduleElementUpdate(
+    {
+      ...selected,
+      style: nextStyle,
+    },
+    120,
+  );
+};
+
+const resizeSelectedElement = (partial: {
+  width?: number;
+  height?: number;
+}) => {
+  const selected = selectedResizableElement.value;
+  if (!selected) return;
+  const width =
+    typeof partial.width === "number" && Number.isFinite(partial.width)
+      ? Math.max(MIN_ELEMENT_WIDTH, Math.round(partial.width))
+      : selected.size.width;
+  const height =
+    typeof partial.height === "number" && Number.isFinite(partial.height)
+      ? Math.max(MIN_ELEMENT_HEIGHT, Math.round(partial.height))
+      : selected.size.height;
+
+  if (width === selected.size.width && height === selected.size.height) return;
+  scheduleElementUpdate(
+    {
+      ...selected,
+      size: { width, height },
+    },
+    120,
+  );
+};
+
+const onSelectedColorInput = (event: Event) => {
+  const value = (event.target as HTMLInputElement).value;
+  setSelectedElementStyle({ color: value });
+};
+
+const onSelectedOpacityInput = (event: Event) => {
+  const raw = Number((event.target as HTMLInputElement).value);
+  if (!Number.isFinite(raw)) return;
+  setSelectedElementStyle({ opacity: clamp(raw / 100, 0.05, 1) });
+};
+
+const onSelectedWidthChange = (event: Event) => {
+  const raw = Number((event.target as HTMLInputElement).value);
+  if (!Number.isFinite(raw)) return;
+  resizeSelectedElement({ width: raw });
+};
+
+const onSelectedHeightChange = (event: Event) => {
+  const raw = Number((event.target as HTMLInputElement).value);
+  if (!Number.isFinite(raw)) return;
+  resizeSelectedElement({ height: raw });
 };
 
 const onWheel = (event: WheelEvent) => {
@@ -686,7 +824,7 @@ const onKeyDown = async (event: KeyboardEvent) => {
 };
 
 const onElementUpdate = async (element: ElementModel) => {
-  collab.scheduleElementSync(element, actions.updateElement, 350);
+  scheduleElementUpdate(element, 220);
 };
 
 const onTableCell = async (
@@ -810,6 +948,62 @@ onBeforeUnmount(() => {
     />
 
     <div
+      v-if="selectedElementStyle"
+      class="absolute z-30 top-14 left-5 border border-zinc-300 bg-white px-3 py-3 text-xs space-y-2 min-w-56"
+    >
+      <p class="font-medium text-zinc-800">Element Properties</p>
+      <label class="flex items-center justify-between gap-3">
+        <span class="text-zinc-600">Color</span>
+        <input
+          type="color"
+          class="h-7 w-10 border border-zinc-300 bg-white p-0"
+          :value="selectedElementStyle.color"
+          @input="onSelectedColorInput"
+        />
+      </label>
+      <label class="block space-y-1">
+        <span class="text-zinc-600">Opacity</span>
+        <div class="flex items-center gap-2">
+          <input
+            type="range"
+            min="5"
+            max="100"
+            step="5"
+            class="flex-1"
+            :value="Math.round(selectedElementStyle.opacity * 100)"
+            @input="onSelectedOpacityInput"
+          />
+          <span class="w-10 text-right">{{ Math.round(selectedElementStyle.opacity * 100) }}%</span>
+        </div>
+      </label>
+      <div v-if="selectedResizableElement" class="grid grid-cols-2 gap-2">
+        <label class="space-y-1">
+          <span class="text-zinc-600">Width</span>
+          <input
+            type="number"
+            min="80"
+            class="w-full border border-zinc-300 px-2 py-1"
+            :value="selectedResizableElement.size.width"
+            @change="onSelectedWidthChange"
+          />
+        </label>
+        <label class="space-y-1">
+          <span class="text-zinc-600">Height</span>
+          <input
+            type="number"
+            min="60"
+            class="w-full border border-zinc-300 px-2 py-1"
+            :value="selectedResizableElement.size.height"
+            @change="onSelectedHeightChange"
+          />
+        </label>
+      </div>
+      <p v-else class="text-[11px] text-zinc-500">
+        Resize arrows by moving endpoints or control points.
+      </p>
+    </div>
+
+    <div
       v-if="arrowTool.active || selectedArrow"
       class="absolute z-30 top-14 right-5 border border-zinc-300 bg-white px-3 py-2 text-xs space-y-2"
     >
@@ -860,7 +1054,7 @@ onBeforeUnmount(() => {
             refY="5"
             orient="auto"
           >
-            <path d="M0,0 L10,5 L0,10 z" fill="black" />
+            <path d="M0,0 L10,5 L0,10 z" fill="context-stroke" />
           </marker>
         </defs>
 
@@ -876,15 +1070,19 @@ onBeforeUnmount(() => {
           <path
             :d="arrow.path"
             fill="none"
-            stroke="black"
+            :stroke="arrow.style.color"
             stroke-width="1.6"
             marker-end="url(#arrowhead)"
-            :class="selectedArrow?.id === arrow.id ? 'opacity-100' : 'opacity-85'"
+            :style="{
+              opacity: selectedArrow?.id === arrow.id
+                ? arrow.style.opacity
+                : Math.max(arrow.style.opacity * 0.85, 0.05),
+            }"
           />
 
           <template v-if="selectedArrow?.id === arrow.id">
-            <circle :cx="arrow.start.x" :cy="arrow.start.y" r="4.5" fill="#3f3f46" />
-            <circle :cx="arrow.end.x" :cy="arrow.end.y" r="4.5" fill="#3f3f46" />
+            <circle :cx="arrow.start.x" :cy="arrow.start.y" r="4.5" :fill="arrow.style.color" />
+            <circle :cx="arrow.end.x" :cy="arrow.end.y" r="4.5" :fill="arrow.style.color" />
 
             <circle
               v-for="(point, index) in arrow.content.controlPoints"
@@ -893,7 +1091,7 @@ onBeforeUnmount(() => {
               :cy="point.y"
               r="5.5"
               fill="white"
-              stroke="black"
+              :stroke="arrow.style.color"
               stroke-width="1.3"
               class="cursor-move"
               @pointerdown="(event) => startControlDrag(event, arrow.id, index)"
@@ -933,6 +1131,7 @@ onBeforeUnmount(() => {
         <CanvasElement
           :element="element as any"
           :selected="state.isSelected(element as any)"
+          :zoom="state.viewport.zoom"
           @pointerdown="onElementPointerDown"
           @update="onElementUpdate"
           @table-cell="onTableCell"

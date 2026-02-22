@@ -13,6 +13,11 @@ export type Point = {
   y: number;
 };
 
+export type CanvasElementStyle = {
+  color: string;
+  opacity: number;
+};
+
 export type CanvasElement = {
   id: string;
   type: CanvasElementType;
@@ -21,6 +26,7 @@ export type CanvasElement = {
     width: number;
     height: number;
   };
+  style: CanvasElementStyle;
   content: Record<string, unknown>;
   metadata: {
     createdBy: string;

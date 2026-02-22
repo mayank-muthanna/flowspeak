@@ -7,6 +7,16 @@ type ActionOptions = {
   currentUser: string;
 };
 
+const defaultStyleForType = (type: CanvasElementType) => {
+  if (type === "sticky") {
+    return { color: "#fef08a", opacity: 1 };
+  }
+  if (type === "freedraw") {
+    return { color: "#111111", opacity: 1 };
+  }
+  return { color: "#ffffff", opacity: 1 };
+};
+
 function createBaseElement(
   type: CanvasElementType,
   at: Point,
@@ -18,6 +28,7 @@ function createBaseElement(
     type,
     position: { ...at },
     size: { width: 180, height: 110 },
+    style: defaultStyleForType(type),
     content: {},
     metadata: {
       createdBy: currentUser,

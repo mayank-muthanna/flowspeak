@@ -29,6 +29,12 @@ export default defineSchema({
       width: v.number(),
       height: v.number(),
     }),
+    style: v.optional(
+      v.object({
+        color: v.string(),
+        opacity: v.number(),
+      }),
+    ),
     content: v.any(),
     metadata: v.object({
       createdBy: v.string(),
